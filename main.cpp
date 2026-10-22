@@ -8,6 +8,7 @@
  */
 #include <signal.h>
 #include <string.h>
+#include <iostream>
 #include <sstream>
 #include "qnx_multi_tcp_server.h"
 
@@ -34,23 +35,24 @@ static void on_signal(int) {
  * @brief 受信した 1 メッセージを処理する（ここではログ出力＋エコー返信）。
  *
  * @param server 送信に使うサーバ
- * @param packet 受信パケット（packet.client_id が送信元）
+ * @param packet 受信パケット（packet.client_id() が送信元）
  *
  * @details
- * 返信は packet.client_id 宛てに async_send() する。送信はキューに積むだけなので
+ * 返信は packet.client_id() 宛てに async_send() する。送信はキューに積むだけなので
  * main スレッドはネットワーク状況に関わらずブロックしない。
  * 受信側は '\n' 区切りでメッセージを切り出す仕様なので、返信にも末尾に "\n" を付ける。
  * async_send() が false を返すのは、クライアントが既に切断済み、または送信キューが満杯のとき。
  */
 static void handle_packet(QnxMultiTcpServer& server, const RecvPacket& packet) {
+    // RecvPacket は operator<< を持つので、そのままログへ流せる（"Client #1: hello" 形式）
     std::ostringstream log;
-    log << "[Recv from Client #" << packet.client_id << "]: " << packet.data;
+    log << "[Recv] " << packet;
     server.log_line(log.str());   // サーバ内部ログと出力が混ざらないよう log_line を使う
 
     // 受信したクライアントに個別返信（'\n' 区切りで送る）
     std::ostringstream reply;
-    reply << "Echo to #" << packet.client_id << ": " << packet.data << "\n";
-    if (!server.async_send(packet.client_id, reply.str())) {
+    reply << "Echo to #" << packet.client_id() << ": " << packet.data() << "\n";
+    if (!server.async_send(packet.client_id(), reply.str())) {
         server.log_line("[Main] reply dropped (client gone or send queue full)");
     }
 }
